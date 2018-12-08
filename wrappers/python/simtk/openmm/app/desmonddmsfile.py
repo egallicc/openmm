@@ -355,6 +355,7 @@ class DesmondDMSFile(object):
         self._addCMAPToSystem(sys)
         self._addVirtualSitesToSystem(sys)
         self._addPositionalHarmonicRestraints(sys)
+        self._addPositionalHarmonicFlatBottomRestraints(sys)
         nb, cnb = self._addNonbondedForceToSystem(sys, OPLS)
 
         # Finish configuring the NonbondedForce.
@@ -863,12 +864,68 @@ class DesmondDMSFile(object):
                 hfczd = (0.5*fcz*kilocalorie_per_mole/angstrom**2).value_in_unit(kilojoule_per_mole/(nanometer**2))
                 force.addParticle(p0,[ x0d, y0d, z0d, hfcxd,  hfcyd,  hfczd])
 
+
+    def _addPositionalHarmonicFlatBottomRestraints(self, sys):
+        """ add flat bottom positional harmonic restraints """
+        go = []
+
+        for (fcounter,conn,tables,offset) in self._localVars():
+            if not self._hasTable('posre_harmflatbottom_term',tables):
+                go.append(False)
+            else:
+                go.append(True)
+            if go[fcounter] and (not self._hasTable('posre_harmflatbottom_param',tables)):
+                raise IOError('DMS file lacks posre_harmflatbottom_param table even though posre_harmflatbottom_term table is present.')
+                return
+
+        if not any(go):
+            return
+
+        if self._verbose:
+            print("Using positional flat bottom harmonic restraints.")
+
+        force = mm.CustomExternalForce("hk*step(dist-tol)*(dist-tol)^2; dist=sqrt((x-x0)^2+(y-y0)^2+(z-z0)^2)")
+        force.addPerParticleParameter("x0")
+        force.addPerParticleParameter("y0")
+        force.addPerParticleParameter("z0")
+        force.addPerParticleParameter("hk") #1/2 force constant
+        force.addPerParticleParameter("tol") #tolerance
+        sys.addForce(force)
+
+        q = """SELECT p0, x0, y0, z0, fc, tol FROM posre_harmflatbottom_term INNER JOIN posre_harmflatbottom_param ON posre_harmflatbottom_term.param=posre_harmflatbottom_param.id"""
+
+        for (fcounter,conn,tables,offset) in self._localVars():
+            if not go[fcounter]:
+                continue
+            for p0, x0, y0, z0, fc, tol in conn.execute(q):
+                p0 += offset
+                x0d = (x0*angstrom).value_in_unit(nanometer)
+                y0d = (y0*angstrom).value_in_unit(nanometer)
+                z0d = (z0*angstrom).value_in_unit(nanometer)
+                hfcd = (0.5*fc*kilocalorie_per_mole/angstrom**2).value_in_unit(kilojoule_per_mole/(nanometer**2))
+                told = (tol*angstrom).value_in_unit(nanometer)
+                force.addParticle(p0,[ x0d, y0d, z0d, hfcd,  told])
+
+        """
+        general flat bottom harmonic potential
+
+        x: some distance or cos(angle)
+        a, b, a<b: lower and upper limits
+
+        (fk/2)*( step(x-b)*(x-b)^2 + step(a-x)*(a-x)^2 ) ; a = center - tol ; b = center + tol
+        """
                 
     def _hasTable(self, table_name, tables):
         """check existence of a table
         """
         return table_name in tables
 
+    def _hasColumn(self, table_name, column_name, tables):
+        """check existence of a column in a table
+        """
+        if not self._hasTable(table_name, tables):
+            return False
+        return column_name in tables[table_name]
     
     def _readSchemas(self, conn):
         """Read and return the schemas of each of the tables in the dms file connection 'conn'"""
