@@ -864,8 +864,7 @@ class DesmondDMSFile(object):
                 hfczd = (0.5*fcz*kilocalorie_per_mole/angstrom**2).value_in_unit(kilojoule_per_mole/(nanometer**2))
                 force.addParticle(p0,[ x0d, y0d, z0d, hfcxd,  hfcyd,  hfczd])
 
-
-
+                
     def _addPositionalHarmonicFlatBottomRestraints(self, sys):
 
         go = []
