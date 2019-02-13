@@ -144,15 +144,19 @@ class DesmondDMSFile(object):
         #assume cell dimensions are set in the first file
         #the other molecules inherit the same cell
         conn = self._conn[0]
-        for x, y, z in conn.execute('SELECT x, y, z FROM global_cell'):
-            boxVectors.append(mm.Vec3(x, y, z))
-        unitCellDimensions = [boxVectors[0][0], boxVectors[1][1], boxVectors[2][2]]
-        top.setUnitCellDimensions(unitCellDimensions*angstrom)
+        if self._hasTable('global_cell', self._tables[0]):
+            for x, y, z in conn.execute('SELECT x, y, z FROM global_cell'):
+                boxVectors.append(mm.Vec3(x, y, z))
+            unitCellDimensions = [boxVectors[0][0], boxVectors[1][1], boxVectors[2][2]]
+            top.setUnitCellDimensions(unitCellDimensions*angstrom)
 
         #process each file
         nfiles = len(self._conn)
         for (fcounter, conn, tables) in zip(range(0,nfiles),self._conn,self._tables):
-
+            """
+            resdb = {}
+            chaindb = {}
+            """
             atoms = {}
             lastChain = None
             lastResId = None
@@ -160,6 +164,24 @@ class DesmondDMSFile(object):
             q = """SELECT id, name, anum, resname, resid, chain, x, y, z, vx, vy, vz
                 FROM particle ORDER BY id"""
             for (atomId, atomName, atomNumber, resName, resId, chain, x, y, z, vx, vy, vz) in conn.execute(q):
+                """
+                #more elegant way to assign atoms to residues
+                #but it works only if atoms in residues are contiguous
+                #due to the fact that openmm does not support non-contiguous residues
+                resuid = "%s:%s:%s" % (resName, resId, chain)
+                if resuid in resdb.keys():
+                    r = resdb[resuid]
+                    c = chaindb[chain]
+                else:
+                    if chain in chaindb.keys():
+                        c = chaindb[chain]
+                    else:
+                        c = top.addChain()
+                        chaindb[chain] = c
+                    r = top.addResidue(resName, c)
+                    resdb[resuid] = r
+                """ 
+
                 newChain = False
                 if chain != lastChain:
                     lastChain = chain
@@ -170,10 +192,11 @@ class DesmondDMSFile(object):
                     if resName in PDBFile._residueNameReplacements:
                         resName = PDBFile._residueNameReplacements[resName]
                     r = top.addResidue(resName, c)
-                    if resName in PDBFile._atomNameReplacements:
-                        atomReplacements = PDBFile._atomNameReplacements[resName]
-                    else:
-                        atomReplacements = {}
+
+                if resName in PDBFile._atomNameReplacements:
+                    atomReplacements = PDBFile._atomNameReplacements[resName]
+                else:
+                    atomReplacements = {}
 
                 if atomNumber == 0 and atomName.startswith('Vrt'):
                     elem = None
@@ -884,7 +907,9 @@ class DesmondDMSFile(object):
         if self._verbose:
             print("Using positional harmonic flat bottom restraints.")
 
-        force = mm.CustomExternalForce("hk*step(dist-tol)*(dist-tol)^2; dist = sqrt((x-x0)^2+(y-y0)^2+(z-z0)^2)")
+        #flat-bottom harmonic potential,
+        #select() is to avoid the singularity at zero distance
+        force = mm.CustomExternalForce("hk*select(step(dist-tol), (dist-tol)^2, 0); dist = sqrt((x-x0)^2+(y-y0)^2+(z-z0)^2)")
         force.addPerParticleParameter("x0")
         force.addPerParticleParameter("y0")
         force.addPerParticleParameter("z0")
