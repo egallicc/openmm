@@ -110,6 +110,10 @@ class DesmondDMSFile(object):
         #retrieve provenance
         self._createProvenance()
 
+        #force groups
+        self._bonded_force_group = 1
+        self._nonbonded_force_group = 2
+        
     def getPositions(self):
         """Get the positions of each atom in the system
         """
@@ -132,7 +136,13 @@ class DesmondDMSFile(object):
             return self._provenance[0]
         else:
             return self._provenance
+        
+    def getBondedForceGroup(self):
+        return self._bonded_force_group
 
+    def getNonBondedForceGroup(self):
+        return self._nonbonded_force_group
+    
     def _createTopology(self):
         """Build the topology of the system
         """
@@ -429,6 +439,7 @@ class DesmondDMSFile(object):
                         gb.addParticle(list(gb_parms[i]))
                     gb.finalize()
                     sys.addForce(gb)
+                    gb.setForceGroup(self._nonbonded_force_group)
                 else:
                     raise IOError("No HCT parameters found in DMS file")
                     
@@ -451,6 +462,7 @@ class DesmondDMSFile(object):
                     # connection table (from bonds)
                     self._add_agbnp2_ct(gb)
                     sys.addForce(gb)
+                    gb.setForceGroup(self._nonbonded_force_group)
                 else:
                     raise IOError("No AGBNP parameters found in DMS file")
 
@@ -482,6 +494,7 @@ class DesmondDMSFile(object):
                         h_flag = ishydrogenN > 0
                         gb.addParticle(radiusN, gammaN, alphaN, chargeN, h_flag)
                     sys.addForce(gb)
+                    gb.setForceGroup(self._nonbonded_force_group)
                     self.gb_parms = gb_parms
                     self.agbnp = gb
                 else:
@@ -501,8 +514,10 @@ class DesmondDMSFile(object):
 
         # Add a CMMotionRemover.
         if removeCMMotion:
-            sys.addForce(mm.CMMotionRemover())
-
+            cmm = mm.CMMotionRemover()
+            sys.addForce(cmm)
+            cmm.setForceGroup(self._bonded_force_group)
+            
         return sys
 
     def _addBondsToSystem(self, sys):
@@ -510,6 +525,7 @@ class DesmondDMSFile(object):
         """
         bonds = mm.HarmonicBondForce()
         sys.addForce(bonds)
+        bonds.setForceGroup(self._bonded_force_group)
 
         q = """SELECT p0, p1, r0, fc, constrained
         FROM stretch_harm_term INNER JOIN stretch_harm_param
@@ -536,6 +552,7 @@ class DesmondDMSFile(object):
         """
         angles = mm.HarmonicAngleForce()
         sys.addForce(angles)
+        angles.setForceGroup(self._bonded_force_group)
         degToRad = math.pi/180
 
         q = """SELECT p0, p1, p2, theta0, fc, constrained
@@ -607,7 +624,8 @@ class DesmondDMSFile(object):
         else:
             periodic = mm.PeriodicTorsionForce()
         sys.addForce(periodic)
-
+        periodic.setForceGroup(self._bonded_force_group)
+        
         q = """SELECT p0, p1, p2, p3, phi0, fc0, fc1, fc2, fc3, fc4, fc5, fc6
         FROM dihedral_trig_term INNER JOIN dihedral_trig_param
         ON dihedral_trig_term.param=dihedral_trig_param.id"""
@@ -643,6 +661,7 @@ class DesmondDMSFile(object):
 
         if any(go):
             sys.addForce(harmonicTorsion)
+            harmonicTorsion.setForceGroup(self._bonded_force_group)
         else:
             return
 
@@ -675,6 +694,7 @@ class DesmondDMSFile(object):
             # Create CMAP torsion terms
             cmap = mm.CMAPTorsionForce()
             sys.addForce(cmap)
+            cmap.setForceGroup(self._bonded_force_group)
         else:
             return
 
@@ -718,12 +738,14 @@ class DesmondDMSFile(object):
         cnb = None
         nb = mm.NonbondedForce()
         sys.addForce(nb)
+        nb.setForceGroup(self._nonbonded_force_group)
 
         if OPLS:
             cnb = mm.CustomNonbondedForce("4.0*epsilon12*((sigma12/r)^12 - (sigma12/r)^6); sigma12=sqrt(sigma1*sigma2); epsilon12=sqrt(epsilon1*epsilon2)")
             cnb.addPerParticleParameter("sigma")
             cnb.addPerParticleParameter("epsilon")
             sys.addForce(cnb)
+            cnb.setForceGroup(self._nonbonded_force_group)
 
         if OPLS:
             q = """SELECT sigma, epsilon
@@ -871,6 +893,7 @@ class DesmondDMSFile(object):
         force.addPerParticleParameter("hky")
         force.addPerParticleParameter("hkz")
         sys.addForce(force)
+        force.setForceGroup(self._bonded_force_group)
 
         q = """SELECT p0, x0, y0, z0, fcx, fcy, fcz FROM posre_harm_term INNER JOIN posre_harm_param ON posre_harm_term.param=posre_harm_param.id"""
 
@@ -916,7 +939,8 @@ class DesmondDMSFile(object):
         force.addPerParticleParameter("hk")
         force.addPerParticleParameter("tol")
         sys.addForce(force)
-
+        force.setForceGroup(self._bonded_force_group)
+        
         q = """SELECT p0, x0, y0, z0, fc, tol FROM posre_harmflatbottom_term INNER JOIN posre_harmflatbottom_param ON posre_harmflatbottom_term.param=posre_harmflatbottom_param.id"""
 
         for (fcounter,conn,tables,offset) in self._localVars():
