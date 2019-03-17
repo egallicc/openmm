@@ -144,10 +144,11 @@ class DesmondDMSFile(object):
         #assume cell dimensions are set in the first file
         #the other molecules inherit the same cell
         conn = self._conn[0]
-        for x, y, z in conn.execute('SELECT x, y, z FROM global_cell'):
-            boxVectors.append(mm.Vec3(x, y, z))
-        unitCellDimensions = [boxVectors[0][0], boxVectors[1][1], boxVectors[2][2]]
-        top.setUnitCellDimensions(unitCellDimensions*angstrom)
+        if self._hasTable('global_cell', self._tables[0]):
+            for x, y, z in conn.execute('SELECT x, y, z FROM global_cell'):
+                boxVectors.append(mm.Vec3(x, y, z))
+            unitCellDimensions = [boxVectors[0][0], boxVectors[1][1], boxVectors[2][2]]
+            top.setUnitCellDimensions(unitCellDimensions*angstrom)
 
         #process each file
         nfiles = len(self._conn)
@@ -593,7 +594,7 @@ class DesmondDMSFile(object):
                 periodic.addPerTorsionParameter('f')
             else:
                 periodic = mm.PeriodicTorsionForce()
-                sys.addForce(periodic)
+            sys.addForce(periodic)
         else:
             return
         
