@@ -599,20 +599,34 @@ class DesmondDMSFile(object):
     def _addPeriodicTorsionsToSystem(self, sys, OPLS):
         """Create the torsion terms
         """
-        if OPLS:
-            periodic = mm.CustomTorsionForce('f * cos(n * theta - phi0)')
-            periodic.addPerTorsionParameter('n')
-            periodic.addPerTorsionParameter('phi0')
-            periodic.addPerTorsionParameter('f')
-        else:
-            periodic = mm.PeriodicTorsionForce()
-        sys.addForce(periodic)
 
+        go = []
+
+        for (fcounter,conn,tables,offset) in self._localVars():
+            if not self._hasTable('dihedral_trig_term', tables):
+                go.append(False)
+            else:
+                go.append(True)
+
+        if any(go):
+            if OPLS:
+                periodic = mm.CustomTorsionForce('f * cos(n * theta - phi0)')
+                periodic.addPerTorsionParameter('n')
+                periodic.addPerTorsionParameter('phi0')
+                periodic.addPerTorsionParameter('f')
+            else:
+                periodic = mm.PeriodicTorsionForce()
+            sys.addForce(periodic)
+        else:
+            return
+        
         q = """SELECT p0, p1, p2, p3, phi0, fc0, fc1, fc2, fc3, fc4, fc5, fc6
         FROM dihedral_trig_term INNER JOIN dihedral_trig_param
         ON dihedral_trig_term.param=dihedral_trig_param.id"""
 
         for (fcounter,conn,tables,offset) in self._localVars():
+            if not go[fcounter]:
+                continue
             for p0, p1, p2, p3, phi0, fc0, fc1, fc2, fc3, fc4, fc5, fc6 in conn.execute(q):
                 p0 += offset
                 p1 += offset
@@ -750,32 +764,43 @@ class DesmondDMSFile(object):
                 if OPLS:
                     cnb.addExclusion(p0, p1)
 
-        q = """SELECT p0, p1, aij, bij, qij
-        FROM pair_12_6_es_term INNER JOIN pair_12_6_es_param
-        ON pair_12_6_es_term.param=pair_12_6_es_param.id"""
-        for (fcounter,conn,tables,offset) in self._localVars():
-            for p0, p1, a_ij, b_ij, q_ij in conn.execute(q):
-                p0 += offset
-                p1 += offset
-                a_ij = (a_ij*kilocalorie_per_mole*(angstrom**12)).in_units_of(kilojoule_per_mole*(nanometer**12))
-                b_ij = (b_ij*kilocalorie_per_mole*(angstrom**6)).in_units_of(kilojoule_per_mole*(nanometer**6))
-                q_ij = q_ij*elementary_charge**2
-                if (b_ij._value == 0.0) or (a_ij._value == 0.0):
-                    new_epsilon = 0
-                    new_sigma = 1
-                else:
-                    new_epsilon =  b_ij**2/(4*a_ij)
-                    new_sigma = (a_ij / b_ij)**(1.0/6.0)
-                nb.addException(p0, p1, q_ij, new_sigma, new_epsilon, True)
+        go = []
 
-            n_total = conn.execute("""SELECT COUNT(*) FROM pair_12_6_es_term""").fetchone()
-            n_in_exclusions = conn.execute("""SELECT COUNT(*)
-            FROM exclusion INNER JOIN pair_12_6_es_term
-            ON (    ( exclusion.p0==pair_12_6_es_term.p0 AND exclusion.p1==pair_12_6_es_term.p1)
-                 OR ( exclusion.p0==pair_12_6_es_term.p1 AND exclusion.p1==pair_12_6_es_term.p0) 
-               )""").fetchone()
-            if not n_total == n_in_exclusions:
-                raise NotImplementedError('All pair_12_6_es_terms must have a corresponding exclusion')
+        for (fcounter,conn,tables,offset) in self._localVars():
+            if not self._hasTable('pair_12_6_es_term', tables):
+                go.append(False)
+            else:
+                go.append(True)
+
+        if any(go):          
+            q = """SELECT p0, p1, aij, bij, qij
+            FROM pair_12_6_es_term INNER JOIN pair_12_6_es_param
+            ON pair_12_6_es_term.param=pair_12_6_es_param.id"""
+            for (fcounter,conn,tables,offset) in self._localVars():
+                if not go[fcounter]:
+                    continue
+                for p0, p1, a_ij, b_ij, q_ij in conn.execute(q):
+                    p0 += offset
+                    p1 += offset
+                    a_ij = (a_ij*kilocalorie_per_mole*(angstrom**12)).in_units_of(kilojoule_per_mole*(nanometer**12))
+                    b_ij = (b_ij*kilocalorie_per_mole*(angstrom**6)).in_units_of(kilojoule_per_mole*(nanometer**6))
+                    q_ij = q_ij*elementary_charge**2
+                    if (b_ij._value == 0.0) or (a_ij._value == 0.0):
+                        new_epsilon = 0
+                        new_sigma = 1
+                    else:
+                        new_epsilon =  b_ij**2/(4*a_ij)
+                        new_sigma = (a_ij / b_ij)**(1.0/6.0)
+                    nb.addException(p0, p1, q_ij, new_sigma, new_epsilon, True)
+
+                n_total = conn.execute("""SELECT COUNT(*) FROM pair_12_6_es_term""").fetchone()
+                n_in_exclusions = conn.execute("""SELECT COUNT(*)
+                FROM exclusion INNER JOIN pair_12_6_es_term
+                ON (    ( exclusion.p0==pair_12_6_es_term.p0 AND exclusion.p1==pair_12_6_es_term.p1)
+                OR ( exclusion.p0==pair_12_6_es_term.p1 AND exclusion.p1==pair_12_6_es_term.p0) 
+                )""").fetchone()
+                if not n_total == n_in_exclusions:
+                    raise NotImplementedError('All pair_12_6_es_terms must have a corresponding exclusion')
 
         return nb, cnb
 
@@ -887,6 +912,56 @@ class DesmondDMSFile(object):
                 hfczd = (0.5*fcz*kilocalorie_per_mole/angstrom**2).value_in_unit(kilojoule_per_mole/(nanometer**2))
                 force.addParticle(p0,[ x0d, y0d, z0d, hfcxd,  hfcyd,  hfczd])
 
+
+    def _addPositionalHarmonicFlatBottomRestraints(self, sys):
+        """ add flat bottom positional harmonic restraints """
+        go = []
+
+        for (fcounter,conn,tables,offset) in self._localVars():
+            if not self._hasTable('posre_harmflatbottom_term',tables):
+                go.append(False)
+            else:
+                go.append(True)
+            if go[fcounter] and (not self._hasTable('posre_harmflatbottom_param',tables)):
+                raise IOError('DMS file lacks posre_harmflatbottom_param table even though posre_harmflatbottom_term table is present.')
+                return
+
+        if not any(go):
+            return
+
+        if self._verbose:
+            print("Using positional flat bottom harmonic restraints.")
+
+        force = mm.CustomExternalForce("hk*step(dist-tol)*(dist-tol)^2; dist=sqrt((x-x0)^2+(y-y0)^2+(z-z0)^2)")
+        force.addPerParticleParameter("x0")
+        force.addPerParticleParameter("y0")
+        force.addPerParticleParameter("z0")
+        force.addPerParticleParameter("hk") #1/2 force constant
+        force.addPerParticleParameter("tol") #tolerance
+        sys.addForce(force)
+
+        q = """SELECT p0, x0, y0, z0, fc, tol FROM posre_harmflatbottom_term INNER JOIN posre_harmflatbottom_param ON posre_harmflatbottom_term.param=posre_harmflatbottom_param.id"""
+
+        for (fcounter,conn,tables,offset) in self._localVars():
+            if not go[fcounter]:
+                continue
+            for p0, x0, y0, z0, fc, tol in conn.execute(q):
+                p0 += offset
+                x0d = (x0*angstrom).value_in_unit(nanometer)
+                y0d = (y0*angstrom).value_in_unit(nanometer)
+                z0d = (z0*angstrom).value_in_unit(nanometer)
+                hfcd = (0.5*fc*kilocalorie_per_mole/angstrom**2).value_in_unit(kilojoule_per_mole/(nanometer**2))
+                told = (tol*angstrom).value_in_unit(nanometer)
+                force.addParticle(p0,[ x0d, y0d, z0d, hfcd,  told])
+
+        """
+        general flat bottom harmonic potential
+
+        x: some distance or cos(angle)
+        a, b, a<b: lower and upper limits
+
+        (fk/2)*( step(x-b)*(x-b)^2 + step(a-x)*(a-x)^2 ) ; a = center - tol ; b = center + tol
+        """
                 
     def _addPositionalHarmonicFlatBottomRestraints(self, sys):
 
@@ -936,6 +1011,12 @@ class DesmondDMSFile(object):
         """
         return table_name in tables
 
+    def _hasColumn(self, table_name, column_name, tables):
+        """check existence of a column in a table
+        """
+        if not self._hasTable(table_name, tables):
+            return False
+        return column_name in tables[table_name]
     
     def _readSchemas(self, conn):
         """Read and return the schemas of each of the tables in the dms file connection 'conn'"""
