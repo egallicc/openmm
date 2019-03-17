@@ -576,20 +576,34 @@ class DesmondDMSFile(object):
     def _addPeriodicTorsionsToSystem(self, sys, OPLS):
         """Create the torsion terms
         """
-        if OPLS:
-            periodic = mm.CustomTorsionForce('f * cos(n * theta - phi0)')
-            periodic.addPerTorsionParameter('n')
-            periodic.addPerTorsionParameter('phi0')
-            periodic.addPerTorsionParameter('f')
-        else:
-            periodic = mm.PeriodicTorsionForce()
-        sys.addForce(periodic)
 
+        go = []
+
+        for (fcounter,conn,tables,offset) in self._localVars():
+            if not self._hasTable('dihedral_trig_term', tables):
+                go.append(False)
+            else:
+                go.append(True)
+
+        if any(go):
+            if OPLS:
+                periodic = mm.CustomTorsionForce('f * cos(n * theta - phi0)')
+                periodic.addPerTorsionParameter('n')
+                periodic.addPerTorsionParameter('phi0')
+                periodic.addPerTorsionParameter('f')
+            else:
+                periodic = mm.PeriodicTorsionForce()
+                sys.addForce(periodic)
+        else:
+            return
+        
         q = """SELECT p0, p1, p2, p3, phi0, fc0, fc1, fc2, fc3, fc4, fc5, fc6
         FROM dihedral_trig_term INNER JOIN dihedral_trig_param
         ON dihedral_trig_term.param=dihedral_trig_param.id"""
 
         for (fcounter,conn,tables,offset) in self._localVars():
+            if not go[fcounter]:
+                continue
             for p0, p1, p2, p3, phi0, fc0, fc1, fc2, fc3, fc4, fc5, fc6 in conn.execute(q):
                 p0 += offset
                 p1 += offset
@@ -727,32 +741,43 @@ class DesmondDMSFile(object):
                 if OPLS:
                     cnb.addExclusion(p0, p1)
 
-        q = """SELECT p0, p1, aij, bij, qij
-        FROM pair_12_6_es_term INNER JOIN pair_12_6_es_param
-        ON pair_12_6_es_term.param=pair_12_6_es_param.id"""
-        for (fcounter,conn,tables,offset) in self._localVars():
-            for p0, p1, a_ij, b_ij, q_ij in conn.execute(q):
-                p0 += offset
-                p1 += offset
-                a_ij = (a_ij*kilocalorie_per_mole*(angstrom**12)).in_units_of(kilojoule_per_mole*(nanometer**12))
-                b_ij = (b_ij*kilocalorie_per_mole*(angstrom**6)).in_units_of(kilojoule_per_mole*(nanometer**6))
-                q_ij = q_ij*elementary_charge**2
-                if (b_ij._value == 0.0) or (a_ij._value == 0.0):
-                    new_epsilon = 0
-                    new_sigma = 1
-                else:
-                    new_epsilon =  b_ij**2/(4*a_ij)
-                    new_sigma = (a_ij / b_ij)**(1.0/6.0)
-                nb.addException(p0, p1, q_ij, new_sigma, new_epsilon, True)
+        go = []
 
-            n_total = conn.execute("""SELECT COUNT(*) FROM pair_12_6_es_term""").fetchone()
-            n_in_exclusions = conn.execute("""SELECT COUNT(*)
-            FROM exclusion INNER JOIN pair_12_6_es_term
-            ON (    ( exclusion.p0==pair_12_6_es_term.p0 AND exclusion.p1==pair_12_6_es_term.p1)
-                 OR ( exclusion.p0==pair_12_6_es_term.p1 AND exclusion.p1==pair_12_6_es_term.p0) 
-               )""").fetchone()
-            if not n_total == n_in_exclusions:
-                raise NotImplementedError('All pair_12_6_es_terms must have a corresponding exclusion')
+        for (fcounter,conn,tables,offset) in self._localVars():
+            if not self._hasTable('pair_12_6_es_term', tables):
+                go.append(False)
+            else:
+                go.append(True)
+
+        if any(go):          
+            q = """SELECT p0, p1, aij, bij, qij
+            FROM pair_12_6_es_term INNER JOIN pair_12_6_es_param
+            ON pair_12_6_es_term.param=pair_12_6_es_param.id"""
+            for (fcounter,conn,tables,offset) in self._localVars():
+                if not go[fcounter]:
+                    continue
+                for p0, p1, a_ij, b_ij, q_ij in conn.execute(q):
+                    p0 += offset
+                    p1 += offset
+                    a_ij = (a_ij*kilocalorie_per_mole*(angstrom**12)).in_units_of(kilojoule_per_mole*(nanometer**12))
+                    b_ij = (b_ij*kilocalorie_per_mole*(angstrom**6)).in_units_of(kilojoule_per_mole*(nanometer**6))
+                    q_ij = q_ij*elementary_charge**2
+                    if (b_ij._value == 0.0) or (a_ij._value == 0.0):
+                        new_epsilon = 0
+                        new_sigma = 1
+                    else:
+                        new_epsilon =  b_ij**2/(4*a_ij)
+                        new_sigma = (a_ij / b_ij)**(1.0/6.0)
+                    nb.addException(p0, p1, q_ij, new_sigma, new_epsilon, True)
+
+                n_total = conn.execute("""SELECT COUNT(*) FROM pair_12_6_es_term""").fetchone()
+                n_in_exclusions = conn.execute("""SELECT COUNT(*)
+                FROM exclusion INNER JOIN pair_12_6_es_term
+                ON (    ( exclusion.p0==pair_12_6_es_term.p0 AND exclusion.p1==pair_12_6_es_term.p1)
+                OR ( exclusion.p0==pair_12_6_es_term.p1 AND exclusion.p1==pair_12_6_es_term.p0) 
+                )""").fetchone()
+                if not n_total == n_in_exclusions:
+                    raise NotImplementedError('All pair_12_6_es_terms must have a corresponding exclusion')
 
         return nb, cnb
 
