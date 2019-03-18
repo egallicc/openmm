@@ -254,6 +254,20 @@ class DesmondDMSFile(object):
 
         return iat
 
+    def setGlobalCell(self, a, b, c):
+        """Update box size in attached DMS files
+        """
+        ba = a /angstrom
+        bb = b /angstrom
+        bc = c /angstrom
+        q = """UPDATE global_cell SET x = ?1, y = ?2, z = ?3 WHERE id == ?4"""
+        for (fcounter,conn,tables,offset) in self._localVars():
+            if self._hasTable('global_cell', tables):
+                conn.execute(q, (ba[0],ba[1],ba[2],1))
+                conn.execute(q, (bb[0],bb[1],bb[2],2))
+                conn.execute(q, (bc[0],bc[1],bc[2],3))
+                conn.commit()
+
     def _get_gb_params(self):
         """
         get charge, radius, screened_radius from hct table in the .dms files
