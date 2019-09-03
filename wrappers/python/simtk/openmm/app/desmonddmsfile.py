@@ -236,13 +236,16 @@ class DesmondDMSFile(object):
         q = """UPDATE particle SET x = ?1, y = ?2, z = ?3 WHERE id == ?4"""
          #file counter
         iat = 0 #global atom counter
+        parameters = []
         for (fcounter,conn,tables,offset) in self._localVars():
             natoms = self._natoms[fcounter]
             for iat_in_file in range(0,natoms):
                 vec = positions[iat]
                 (x, y , z) = vec.value_in_unit(angstrom)
-                conn.execute(q, (x,y,z,iat_in_file))
+                parameters.append((x,y,z,iat_in_file))
+                #conn.execute(q, (x,y,z,iat_in_file))
                 iat += 1
+            conn.executemany(q, parameters)
             conn.commit()
 
         return iat
@@ -253,13 +256,16 @@ class DesmondDMSFile(object):
         q = """UPDATE particle SET vx = ?1, vy = ?2, vz = ?3 WHERE id == ?4"""
          #file counter
         iat = 0 #global atom counter
+        parameters = []
         for (fcounter,conn,tables,offset) in self._localVars():
             natoms = self._natoms[fcounter]
             for iat_in_file in range(0,natoms):
                 vec = velocities[iat]
                 (vx, vy , vz) = vec.value_in_unit(angstrom/femtosecond)
-                conn.execute(q, (vx,vy,vz,iat_in_file))
+                parameters.append((vx,vy,vz,iat_in_file))
+                #conn.execute(q, (vx,vy,vz,iat_in_file))
                 iat += 1
+            conn.executemany(q, parameters)
             conn.commit()
 
         return iat
