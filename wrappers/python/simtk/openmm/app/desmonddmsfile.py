@@ -35,7 +35,7 @@ from simtk.openmm.app import Element, Topology, PDBFile
 from simtk.openmm.app.element import hydrogen
 from simtk.unit import (nanometer, angstrom, dalton, radian,
                         kilocalorie_per_mole, kilojoule_per_mole,
-                        degree, elementary_charge, femtosecond)
+                        degree, elementary_charge, femtosecond, picosecond)
 
 from simtk.openmm.app.amberprmtopfile import HCT
 from simtk.openmm.app.internal.customgbforces import GBSAHCTForce
@@ -227,7 +227,7 @@ class DesmondDMSFile(object):
                 top.addBond(atoms[p0], atoms[p1])
 
         positions = positions*angstrom
-        velocities = velocities*angstrom/femtosecond
+        velocities = velocities*angstrom/picosecond
         return top, positions, velocities
 
     def setPositions(self, positions):
@@ -261,7 +261,7 @@ class DesmondDMSFile(object):
             natoms = self._natoms[fcounter]
             for iat_in_file in range(0,natoms):
                 vec = velocities[iat]
-                (vx, vy , vz) = vec.value_in_unit(angstrom/femtosecond)
+                (vx, vy , vz) = vec.value_in_unit(angstrom/picosecond)
                 parameters.append((vx,vy,vz,iat_in_file))
                 #conn.execute(q, (vx,vy,vz,iat_in_file))
                 iat += 1
