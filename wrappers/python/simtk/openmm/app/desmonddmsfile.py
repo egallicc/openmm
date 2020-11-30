@@ -154,12 +154,14 @@ class DesmondDMSFile(object):
         #assume cell dimensions are set in the first file
         #the other molecules inherit the same cell
         conn = self._conn[0]
+        self.pbc = False
         if self._hasTable('global_cell', self._tables[0]):
             for x, y, z in conn.execute('SELECT x, y, z FROM global_cell'):
                 boxVectors.append(mm.Vec3(x, y, z))
             unitCellDimensions = [boxVectors[0][0], boxVectors[1][1], boxVectors[2][2]]
             top.setUnitCellDimensions(unitCellDimensions*angstrom)
-
+            self.pbc = True
+            
         #process each file
         nfiles = len(self._conn)
         for (fcounter, conn, tables) in zip(range(0,nfiles),self._conn,self._tables):
@@ -956,55 +958,15 @@ class DesmondDMSFile(object):
                 force.addParticle(p0,[ x0d, y0d, z0d, hfcxd,  hfcyd,  hfczd])
 
 
-    def _addPositionalHarmonicFlatBottomRestraints(self, sys):
-        """ add flat bottom positional harmonic restraints """
-        go = []
-
-        for (fcounter,conn,tables,offset) in self._localVars():
-            if not self._hasTable('posre_harmflatbottom_term',tables):
-                go.append(False)
-            else:
-                go.append(True)
-            if go[fcounter] and (not self._hasTable('posre_harmflatbottom_param',tables)):
-                raise IOError('DMS file lacks posre_harmflatbottom_param table even though posre_harmflatbottom_term table is present.')
-                return
-
-        if not any(go):
-            return
-
-        if self._verbose:
-            print("Using positional flat bottom harmonic restraints.")
-
-        force = mm.CustomExternalForce("hk*step(dist-tol)*(dist-tol)^2; dist=sqrt((x-x0)^2+(y-y0)^2+(z-z0)^2)")
-        force.addPerParticleParameter("x0")
-        force.addPerParticleParameter("y0")
-        force.addPerParticleParameter("z0")
-        force.addPerParticleParameter("hk") #1/2 force constant
-        force.addPerParticleParameter("tol") #tolerance
-        sys.addForce(force)
-
-        q = """SELECT p0, x0, y0, z0, fc, tol FROM posre_harmflatbottom_term INNER JOIN posre_harmflatbottom_param ON posre_harmflatbottom_term.param=posre_harmflatbottom_param.id"""
-
-        for (fcounter,conn,tables,offset) in self._localVars():
-            if not go[fcounter]:
-                continue
-            for p0, x0, y0, z0, fc, tol in conn.execute(q):
-                p0 += offset
-                x0d = (x0*angstrom).value_in_unit(nanometer)
-                y0d = (y0*angstrom).value_in_unit(nanometer)
-                z0d = (z0*angstrom).value_in_unit(nanometer)
-                hfcd = (0.5*fc*kilocalorie_per_mole/angstrom**2).value_in_unit(kilojoule_per_mole/(nanometer**2))
-                told = (tol*angstrom).value_in_unit(nanometer)
-                force.addParticle(p0,[ x0d, y0d, z0d, hfcd,  told])
-
-        """
+                
+    """
         general flat bottom harmonic potential
 
         x: some distance or cos(angle)
         a, b, a<b: lower and upper limits
 
         (fk/2)*( step(x-b)*(x-b)^2 + step(a-x)*(a-x)^2 ) ; a = center - tol ; b = center + tol
-        """
+     """
                 
     def _addPositionalHarmonicFlatBottomRestraints(self, sys):
 
@@ -1027,7 +989,10 @@ class DesmondDMSFile(object):
 
         #flat-bottom harmonic potential,
         #select() is to avoid the singularity at zero distance
-        force = mm.CustomExternalForce("hk*select(step(dist-tol), (dist-tol)^2, 0); dist = sqrt((x-x0)^2+(y-y0)^2+(z-z0)^2)")
+        if self.pbc:
+            force = mm.CustomExternalForce("hk*select(step(dist-tol), (dist-tol)^2, 0); dist = periodicdistance(x,y,z,x0,y0,z0)")
+        else:
+            force = mm.CustomExternalForce("hk*select(step(dist-tol), (dist-tol)^2, 0); dist = sqrt((x-x0)^2+(y-y0)^2+(z-z0)^2)")
         force.addPerParticleParameter("x0")
         force.addPerParticleParameter("y0")
         force.addPerParticleParameter("z0")
