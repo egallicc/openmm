@@ -40,6 +40,7 @@ from openmm.unit import (nanometer, angstrom, dalton, radian,
 from openmm.app.amberprmtopfile import HCT
 from openmm.app.internal.customgbforces import GBSAHCTForce
 import openmm.unit as u
+import numpy as np
 
 
 class DesmondDMSFile(object):
@@ -953,7 +954,7 @@ class DesmondDMSFile(object):
                 hfcxd = (0.5*fcx*kilocalorie_per_mole/angstrom**2).value_in_unit(kilojoule_per_mole/(nanometer**2))
                 hfcyd = (0.5*fcy*kilocalorie_per_mole/angstrom**2).value_in_unit(kilojoule_per_mole/(nanometer**2))
                 hfczd = (0.5*fcz*kilocalorie_per_mole/angstrom**2).value_in_unit(kilojoule_per_mole/(nanometer**2))
-                force.addParticle(p0,[ x0d, y0d, z0d, hfcxd,  hfcyd,  hfczd])
+                force.addParticle(int(p0),np.array([ x0d, y0d, z0d, hfcxd,  hfcyd,  hfczd]))
 
 
                 
@@ -1011,7 +1012,7 @@ class DesmondDMSFile(object):
                 z0d = (z0*angstrom).value_in_unit(nanometer)
                 hfcd = (0.5*fc*kilocalorie_per_mole/angstrom**2).value_in_unit(kilojoule_per_mole/(nanometer**2))
                 told = (tol*angstrom).value_in_unit(nanometer)
-                force.addParticle(p0,[ x0d, y0d, z0d, hfcd, told])
+                force.addParticle(int(p0),np.array([ x0d, y0d, z0d, hfcd, told]))
                 
     def _hasTable(self, table_name, tables):
         """check existence of a table
