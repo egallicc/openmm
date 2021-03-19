@@ -31,7 +31,6 @@
 #include "OpenCLArray.h"
 #include "OpenCLExpressionUtilities.h"
 #include "openmm/common/NonbondedUtilities.h"
-#include <cl.hpp>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -328,8 +327,9 @@ private:
     std::map<int, std::string> groupKernelSource;
     double lastCutoff;
     bool useCutoff, usePeriodic, deviceIsCpu, anyExclusions, usePadding, forceRebuildNeighborList;
-    int numForceBuffers, startTileIndex, numTiles, startBlockIndex, numBlocks, maxExclusions, numForceThreadBlocks;
+    int numForceBuffers, startTileIndex, startBlockIndex, numBlocks, maxExclusions, numForceThreadBlocks;
     int forceThreadBlockSize, interactingBlocksThreadBlockSize, groupFlags;
+    long long numTiles;
 };
 
 /**

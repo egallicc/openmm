@@ -1,10 +1,10 @@
 import unittest
 from validateConstraints import *
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
-import simtk.openmm.app.element as elem
-import simtk.openmm.app.forcefield as forcefield
+from openmm.app import *
+from openmm import *
+from openmm.unit import *
+import openmm.app.element as elem
+import openmm.app.forcefield as forcefield
 import math
 import textwrap
 try:
@@ -246,7 +246,10 @@ class TestForceField(unittest.TestCase):
         for atom in topology.atoms():
             if atom.element == elem.hydrogen:
                 self.assertNotEqual(hydrogenMass, system1.getParticleMass(atom.index))
-                self.assertEqual(hydrogenMass, system2.getParticleMass(atom.index))
+                if atom.residue.name == 'HOH':
+                    self.assertEqual(system1.getParticleMass(atom.index), system2.getParticleMass(atom.index))
+                else:
+                    self.assertEqual(hydrogenMass, system2.getParticleMass(atom.index))
         totalMass1 = sum([system1.getParticleMass(i) for i in range(system1.getNumParticles())]).value_in_unit(amu)
         totalMass2 = sum([system2.getParticleMass(i) for i in range(system2.getNumParticles())]).value_in_unit(amu)
         self.assertAlmostEqual(totalMass1, totalMass2)
@@ -401,7 +404,7 @@ class TestForceField(unittest.TestCase):
             from uuid import uuid4
             template_name = uuid4()
             # Create residue template.
-            from simtk.openmm.app.forcefield import _createResidueTemplate
+            from openmm.app.forcefield import _createResidueTemplate
             template = _createResidueTemplate(residue) # use helper function
             template.name = template_name # replace template name
             for (template_atom, residue_atom) in zip(template.atoms, residue.atoms()):
@@ -932,7 +935,7 @@ class TestForceField(unittest.TestCase):
         system1_indexes = [imp1[0], imp1[1], imp1[2], imp1[3]]
         system2_indexes = [imp2[0], imp2[1], imp2[2], imp2[3]]
 
-        self.assertEqual(system1_indexes, [51, 56, 54, 55])
+        self.assertEqual(system1_indexes, [51, 55, 54, 56])
         self.assertEqual(system2_indexes, [51, 55, 54, 56])
 
     def test_ImpropersOrdering_smirnoff(self):

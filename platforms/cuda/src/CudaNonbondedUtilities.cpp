@@ -167,7 +167,7 @@ void CudaNonbondedUtilities::requestExclusions(const vector<vector<int> >& exclu
     }
 }
 
-static bool compareUshort2(ushort2 a, ushort2 b) {
+static bool compareInt2(int2 a, int2 b) {
     return ((a.y < b.y) || (a.y == b.y && a.x < b.x));
 }
 
@@ -199,15 +199,15 @@ void CudaNonbondedUtilities::initialize(const System& system) {
             tilesWithExclusions.insert(make_pair(max(x, y), min(x, y)));
         }
     }
-    vector<ushort2> exclusionTilesVec;
+    vector<int2> exclusionTilesVec;
     for (set<pair<int, int> >::const_iterator iter = tilesWithExclusions.begin(); iter != tilesWithExclusions.end(); ++iter)
-        exclusionTilesVec.push_back(make_ushort2((unsigned short) iter->first, (unsigned short) iter->second));
-    sort(exclusionTilesVec.begin(), exclusionTilesVec.end(), compareUshort2);
-    exclusionTiles.initialize<ushort2>(context, exclusionTilesVec.size(), "exclusionTiles");
+        exclusionTilesVec.push_back(make_int2(iter->first, iter->second));
+    sort(exclusionTilesVec.begin(), exclusionTilesVec.end(), compareInt2);
+    exclusionTiles.initialize<int2>(context, exclusionTilesVec.size(), "exclusionTiles");
     exclusionTiles.upload(exclusionTilesVec);
     map<pair<int, int>, int> exclusionTileMap;
     for (int i = 0; i < (int) exclusionTilesVec.size(); i++) {
-        ushort2 tile = exclusionTilesVec[i];
+        int2 tile = exclusionTilesVec[i];
         exclusionTileMap[make_pair(tile.x, tile.y)] = i;
     }
     vector<vector<int> > exclusionBlocksForBlock(numAtomBlocks);
@@ -369,7 +369,7 @@ double CudaNonbondedUtilities::getMaxCutoffDistance() {
 }
 
 double CudaNonbondedUtilities::padCutoff(double cutoff) {
-    double padding = (usePadding ? 0.1*cutoff : 0.0);
+    double padding = (usePadding ? 0.08*cutoff : 0.0);
     return cutoff+padding;
 }
 
@@ -463,9 +463,9 @@ void CudaNonbondedUtilities::setAtomBlockRange(double startFraction, double endF
     int numAtomBlocks = context.getNumAtomBlocks();
     startBlockIndex = (int) (startFraction*numAtomBlocks);
     numBlocks = (int) (endFraction*numAtomBlocks)-startBlockIndex;
-    int totalTiles = context.getNumAtomBlocks()*(context.getNumAtomBlocks()+1)/2;
+    long long totalTiles = context.getNumAtomBlocks()*((long long)context.getNumAtomBlocks()+1)/2;
     startTileIndex = (int) (startFraction*totalTiles);
-    numTiles = (int) (endFraction*totalTiles)-startTileIndex;
+    numTiles = (long long) (endFraction*totalTiles)-startTileIndex;
     forceRebuildNeighborList = true;
 }
 
@@ -498,8 +498,7 @@ void CudaNonbondedUtilities::createKernelsForGroups(int groups) {
         if (context.getBoxIsTriclinic())
             defines["TRICLINIC"] = "1";
         defines["MAX_EXCLUSIONS"] = context.intToString(maxExclusions);
-        // Temporarily disable the pair list until we figure out why it's failing on some GPUs.
-        defines["MAX_BITS_FOR_PAIRS"] = "0";//(canUsePairList ? "2" : "0");
+        defines["MAX_BITS_FOR_PAIRS"] = (canUsePairList ? (context.getComputeCapability() < 8.0 ? "2" : "4") : "0");
         CUmodule interactingBlocksProgram = context.createModule(CudaKernelSources::vectorOps+CudaKernelSources::findInteractingBlocks, defines);
         kernels.findBlockBoundsKernel = context.getKernel(interactingBlocksProgram, "findBlockBounds");
         kernels.sortBoxDataKernel = context.getKernel(interactingBlocksProgram, "sortBoxData");
@@ -651,6 +650,21 @@ CUfunction CudaNonbondedUtilities::createInteractionKernel(const string& source,
         }
     }
     replacements["LOAD_ATOM2_PARAMETERS"] = load2j.str();
+    
+    stringstream clearLocal;
+    for (int i = 0; i < (int) params.size(); i++) {
+        if (useShuffle)
+            clearLocal<<"shfl";
+        else
+            clearLocal<<"localData[atom2].";
+        clearLocal<<params[i].getName()<<" = ";
+        if (params[i].getNumComponents() == 1)
+            clearLocal<<"0;\n";
+        else
+            clearLocal<<"make_"<<params[i].getType()<<"(0);\n";
+    }
+    replacements["CLEAR_LOCAL_PARAMETERS"] = clearLocal.str();
+
     stringstream initDerivs;
     for (int i = 0; i < energyParameterDerivatives.size(); i++)
         initDerivs<<"mixed energyParamDeriv"<<i<<" = 0;\n";

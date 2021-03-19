@@ -37,12 +37,12 @@ the results.
 Installing OpenMM
 *****************
 
-OpenMM is installed using the Conda package manager (http://conda.pydata.org).
+OpenMM is installed using the Conda package manager (https://docs.conda.io).
 Conda is included as part of the Anaconda Python distribution, which you can
-download from http://docs.continuum.io/anaconda/install.  This is a Python
+download from https://docs.continuum.io/anaconda/install.  This is a Python
 distribution specifically designed for scientific applications, with many of the
 most popular mathematical and scientific packages preinstalled.  Alternatively
-you can use Miniconda (available from http://conda.pydata.org/miniconda.html),
+you can use Miniconda (available from https://docs.conda.io/en/latest/miniconda.html),
 which includes only Python itself, plus the Conda package manager.  That offers
 a much smaller initial download, with the ability to then install only the
 packages you want.
@@ -54,38 +54,48 @@ to compile from source.  Detailed instruction are in Chapter :ref:`compiling-ope
 \1. Begin by installing the most recent 64 bit, Python 3.x version of either
 Anaconda or Miniconda.
 
-\2. (Optional) If you want to run OpenMM on a GPU, install CUDA and/or OpenCL.
+\2. (Optional) If you want to run OpenMM on a GPU, make sure you have installed
+modern drivers from your vendor.
 
-  * If you have an Nvidia GPU, download CUDA from
-    https://developer.nvidia.com/cuda-downloads.  Be sure to install both the
-    drivers and toolkit.  OpenCL is included with the CUDA drivers.
+  * If you have an Nvidia GPU, download the latest drivers from
+    https://www.nvidia.com/Download/index.aspx. CUDA itself will be provided by
+    the :code:`cudatoolkit` package when you install :code:`openmm` in the next steps.
   * If you have an AMD GPU and are using Linux or Windows, download the latest
-    version of the Catalyst driver from http://support.amd.com.  On OS X, OpenCL
+    version of the drivers from https://support.amd.com.  On OS X, OpenCL
     is included with the operating system and is supported on OS X 10.10.3 or
     later.
 
 3. Open a command line terminal and type the following command
 ::
 
-    conda install -c omnia -c conda-forge openmm
+    conda install -c conda-forge openmm
 
-This installs a version of OpenMM that is compiled to work with CUDA 10.1.
+With recent :code:`conda` versions (v4.8.4+), this will install a version of
+OpenMM compiled with the latest version of CUDA supported by your drivers.
 Alternatively you can request a version that is compiled for a specific CUDA
 version with the command
 ::
 
-    conda install -c omnia/label/cuda92 -c conda-forge openmm
+    conda install -c conda-forge openmm cudatoolkit=10.0
 
-where :code:`cuda92` should be replaced with the particular CUDA version
-installed on your computer.  Supported values are :code:`cuda75`, :code:`cuda80`,
-:code:`cuda90`, :code:`cuda91`, :code:`cuda92`, :code:`cuda100`, and :code:`cuda101`.  Because
-different CUDA releases are not binary compatible with each other, OpenMM can
-only work with the particular CUDA version it was compiled with.
+where :code:`10.0` should be replaced with the particular CUDA version
+you want to target.  We build packages for CUDA 9.2 and above on Linux,
+and CUDA 10.0 and above on Windows.  Because different CUDA releases are
+not binary compatible with each other, OpenMM can only work with the particular
+CUDA version it was compiled with.
+
+.. note::
+
+    Prior to v7.5, conda packages for OpenMM where distributed through the
+    :code:`omnia` channel (https://anaconda.org/omnia). Starting with v7.5,
+    OpenMM will use the :code:`conda-forge` channel. Check the documentation
+    for previous versions in case you want to install older packages.
+
 
 4. Verify your installation by typing the following command:
 ::
 
-    python -m simtk.testInstallation
+    python -m openmm.testInstallation
 
 This command confirms that OpenMM is installed, checks whether GPU acceleration
 is available (via the OpenCL and/or CUDA platforms), and verifies that all
@@ -111,9 +121,9 @@ steps.
 .. samepage::
     ::
 
-        from simtk.openmm.app import *
-        from simtk.openmm import *
-        from simtk.unit import *
+        from openmm.app import *
+        from openmm import *
+        from openmm.unit import *
         from sys import stdout
 
         pdb = PDBFile('input.pdb')
@@ -154,9 +164,9 @@ You can name your own scripts whatever you want.  Let’s go through the script 
 by line and see how it works.
 ::
 
-    from simtk.openmm.app import *
-    from simtk.openmm import *
-    from simtk.unit import *
+    from openmm.app import *
+    from openmm import *
+    from openmm.unit import *
     from sys import stdout
 
 These lines are just telling the Python interpreter about some libraries we will
@@ -289,9 +299,9 @@ found in OpenMM’s :file:`examples` folder with the name :file:`simulateAmber.p
 .. samepage::
     ::
 
-        from simtk.openmm.app import *
-        from simtk.openmm import *
-        from simtk.unit import *
+        from openmm.app import *
+        from openmm import *
+        from openmm.unit import *
         from sys import stdout
 
         prmtop = AmberPrmtopFile('input.prmtop')
@@ -382,9 +392,9 @@ with the name :file:`simulateGromacs.py`.
 .. samepage::
     ::
 
-        from simtk.openmm.app import *
-        from simtk.openmm import *
-        from simtk.unit import *
+        from openmm.app import *
+        from openmm import *
+        from openmm.unit import *
         from sys import stdout
 
         gro = GromacsGroFile('input.gro')
@@ -446,9 +456,9 @@ on the :class:`CharmmPsfFile`.
 .. samepage::
     ::
 
-        from simtk.openmm.app import *
-        from simtk.openmm import *
-        from simtk.unit import *
+        from openmm.app import *
+        from openmm import *
+        from openmm.unit import *
         from sys import stdout, exit, stderr
 
         psf = CharmmPsfFile('input.psf')
@@ -491,7 +501,7 @@ script, and can even run it for you.
 To install OpenMM-Setup, open a command line terminal and type the following command
 ::
 
-    conda install -c omnia openmm-setup
+    conda install -c conda-forge openmm-setup
 
 You can then launch it by typing the command
 ::
@@ -613,7 +623,7 @@ water model and ions\ :cite:`Wang2014`:
          you run the risk of having :class:`ForceField` throw an exception since
          :file:`tip3p.xml` will be missing parameters for ions in your system.
 
-The converted parameter sets come from the `AmberTools 17 release <http://ambermd.org/AmberTools17-get.html>`_
+The converted parameter sets come from the `AmberTools 17 release <http://ambermd.org/AmberTools.php>`_
 and were converted using the `openmm-forcefields <https://github.com/choderalab/openmm-forcefields>`_ package and `ParmEd <https://github.com/parmed/parmed>`_.
 
 CHARMM36
@@ -781,6 +791,94 @@ File                 Water Model
 :code:`swm4ndp.xml`  SWM4-NDP water model\ :cite:`Lamoureux2006`
 ===================  ============================================
 
+Small molecule parameters
+=========================
+
+The OpenMM force fields above include pregenerated templates for biopolymers
+and solvents. If your system instead contain small molecules, it is often
+necessary to generate these parameters on the fly.
+
+
+There are two options for doing this within the OpenMM ``app`` ecosystem:
+
+Small molecule residue template generators
+------------------------------------------
+
+One approach is to use residue template generators for small molecules from the
+openmmforcefields_  conda package.
+You can install this via conda with:
+
+.. code-block:: bash
+
+    $ conda install -c conda-forge openmmforcefields
+
+You can then add a small molecule residue template generator using the Open Force
+Field Initiative small molecule force fields using the following example:
+
+::
+
+    # Create an openforcefield Molecule object for benzene from SMILES
+    from openforcefield.topology import Molecule
+    molecule = Molecule.from_smiles('c1ccccc1')
+    # Create the SMIRNOFF template generator with the most up to date Open Force Field Initiative force field
+    from openmmforcefields.generators import SMIRNOFFTemplateGenerator
+    smirnoff = SMIRNOFFTemplateGenerator(molecules=molecule)
+    # Create an OpenMM ForceField object with AMBER ff14SB and TIP3P with compatible ions
+    from openmm.app import ForceField
+    forcefield = ForceField('amber/protein.ff14SB.xml', 'amber/tip3p_standard.xml', 'amber/tip3p_HFE_multivalent.xml')
+    # Register the SMIRNOFF template generator
+    forcefield.registerTemplateGenerator(smirnoff.generator)
+
+Alternatively, you can use the older `AMBER GAFF small molecule force field <http://ambermd.org/antechamber/gaff.html>`_:
+
+::
+
+    # Create an openforcefield Molecule object for benzene from SMILES
+    from openforcefield.topology import Molecule
+    molecule = Molecule.from_smiles('c1ccccc1')
+    # Create the GAFF template generator
+    from openmmforcefields.generators import GAFFTemplateGenerator
+    gaff = GAFFTemplateGenerator(molecules=molecule)
+    # Create an OpenMM ForceField object with AMBER ff14SB and TIP3P with compatible ions
+    from openmm.app import ForceField
+    forcefield = ForceField('amber/protein.ff14SB.xml', 'amber/tip3p_standard.xml', 'amber/tip3p_HFE_multivalent.xml')
+    # Register the GAFF template generator
+    forcefield.registerTemplateGenerator(gaff.generator)
+    # You can now parameterize an OpenMM Topology object that contains the specified molecule.
+    # forcefield will load the appropriate GAFF parameters when needed, and antechamber
+    # will be used to generate small molecule parameters on the fly.
+    from openmm.app import PDBFile
+    pdbfile = PDBFile('t4-lysozyme-L99A-with-benzene.pdb')
+    system = forcefield.createSystem(pdbfile.topology)
+
+More documentation can be found on the openmmforcefields_ page.
+
+Managing force fields with ``SystemGenerator``
+----------------------------------------------
+
+As an alternative to explicitly registering template generators, the openmmforcefields_
+package provides a ``SystemGenerator`` facility to simplify biopolymer and
+small molecule force field management. To use this, you can simply specify the
+small molecule force field you want to use:
+
+::
+
+    # Define the keyword arguments to feed to ForceField
+    from openmm import unit
+    from openmm import app
+    forcefield_kwargs = { 'constraints' : app.HBonds, 'rigidWater' : True, 'removeCMMotion' : False, 'hydrogenMass' : 4*unit.amu }
+    # Initialize a SystemGenerator using the Open Force Field Initiative 1.2.0 force field (openff-1.2.0)
+    from openmmforcefields.generators import SystemGenerator
+    system_generator = SystemGenerator(forcefields=['amber/ff14SB.xml', 'amber/tip3p_standard.xml'], small_molecule_forcefield='openff-1.2.0', forcefield_kwargs=forcefield_kwargs, cache='db.json')
+    # Create an OpenMM System from an OpenMM Topology object and a list of openforcefield Molecule objects
+    molecules = Molecule.from_file('molecules.sdf', file_format='sdf')
+    system = system_generator.create_system(topology, molecules=molecules)
+
+The ``SystemGenerator`` will match any instances of the molecules found in ``molecules.sdf`` to those that appear in ``topology``.
+Note that the protonation and tautomeric states must match exactly between the ``molecules`` read and those appearing in the Topology.
+See the openmmforcefields_ documentation for more details.
+
+.. _openmmforcefields: http://github.com/openmm/openmmforcefields
 
 AMBER Implicit Solvent
 ======================
@@ -1689,9 +1787,9 @@ PDB file.
 .. samepage::
     ::
 
-        from simtk.openmm.app import *
-        from simtk.openmm import *
-        from simtk.unit import *
+        from openmm.app import *
+        from openmm import *
+        from openmm.unit import *
 
         print('Loading...')
         pdb = PDBFile('input.pdb')
@@ -2387,7 +2485,7 @@ The :code:`<PeriodicTorsionForce>` tag also supports an optional
 impropers are assigned in different simulation packages:
 
  * :code:`ordering="default"` specifies the default behavior if the attribute
-   is omitted. 
+   is omitted.
  * :code:`ordering="amber"` produces behavior that replicates the behavior of
    AmberTools LEaP
  * :code:`ordering="charmm"` produces behavior more consistent with CHARMM
@@ -3163,9 +3261,9 @@ This :code:`generator` function must conform to the following API:
         """
         Parameters
         ----------
-        forcefield : simtk.openmm.app.ForceField
+        forcefield : openmm.app.ForceField
             The ForceField object to which residue templates and/or parameters are to be added.
-        residue : simtk.openmm.app.Topology.Residue
+        residue : openmm.app.Topology.Residue
             The residue topology for which a template is to be generated.
 
         Returns

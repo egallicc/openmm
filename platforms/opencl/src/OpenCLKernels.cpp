@@ -6,7 +6,7 @@
  * Biological Structures at Stanford, funded under the NIH Roadmap for        *
  * Medical Research, grant U54 GM072970. See https://simtk.org.               *
  *                                                                            *
- * Portions copyright (c) 2008-2019 Stanford University and the Authors.      *
+ * Portions copyright (c) 2008-2020 Stanford University and the Authors.      *
  * Authors: Peter Eastman                                                     *
  * Contributors:                                                              *
  *                                                                            *
@@ -60,7 +60,7 @@ static void setPosqCorrectionArg(OpenCLContext& cl, cl::Kernel& kernel, int inde
     if (cl.getUseMixedPrecision())
         kernel.setArg<cl::Buffer>(index, cl.getPosqCorrection().getDeviceBuffer());
     else
-        kernel.setArg<void*>(index, NULL);
+        kernel.setArg(index, sizeof(void*), NULL);
 }
 
 static void setPeriodicBoxSizeArg(OpenCLContext& cl, cl::Kernel& kernel, int index) {
@@ -598,8 +598,8 @@ public:
     void computeForceAndEnergy(bool includeForces, bool includeEnergy, int groups) {
         if ((groups&(1<<forceGroup)) != 0) {
             vector<cl::Event> events(1);
-            cl.getQueue().enqueueMarker(&events[0]);
-            queue.enqueueWaitForEvents(events);
+            cl.getQueue().enqueueMarkerWithWaitList(NULL, &events[0]);
+            queue.enqueueBarrierWithWaitList(&events);
         }
     }
 private:
@@ -624,7 +624,7 @@ public:
             vector<cl::Event> events(1);
             events[0] = event;
             event = cl::Event();
-            cl.getQueue().enqueueWaitForEvents(events);
+            cl.getQueue().enqueueBarrierWithWaitList(&events);
             if (includeEnergy)
                 cl.executeKernel(addEnergyKernel, pmeEnergyBuffer.getSize());
         }
@@ -743,6 +743,7 @@ void OpenCLCalcNonbondedForceKernel::initialize(const System& system, const Nonb
     alpha = 0;
     ewaldSelfEnergy = 0.0;
     map<string, string> paramsDefines;
+    paramsDefines["ONE_4PI_EPS0"] = cl.doubleToString(ONE_4PI_EPS0);
     hasOffsets = (force.getNumParticleParameterOffsets() > 0 || force.getNumExceptionParameterOffsets() > 0);
     if (hasOffsets)
         paramsDefines["HAS_OFFSETS"] = "1";
@@ -962,7 +963,7 @@ void OpenCLCalcNonbondedForceKernel::initialize(const System& system, const Nonb
                         for (int i = 0; i < ndata; i++)
                         {
                             if (moduli[i] < 1.0e-7)
-                                moduli[i] = (moduli[i-1]+moduli[i+1])*0.5f;
+                                moduli[i] = (moduli[(i-1+ndata)%ndata]+moduli[(i+1)%ndata])*0.5;
                         }
                         if (dim == 0)
                             xmoduli->upload(moduli, true);
@@ -1001,6 +1002,7 @@ void OpenCLCalcNonbondedForceKernel::initialize(const System& system, const Nonb
             replacements["EWALD_ALPHA"] = cl.doubleToString(alpha);
             replacements["TWO_OVER_SQRT_PI"] = cl.doubleToString(2.0/sqrt(M_PI));
             replacements["DO_LJPME"] = doLJPME ? "1" : "0";
+            replacements["USE_PERIODIC"] = force.getExceptionsUsePeriodicBoundaryConditions() ? "1" : "0";
             if (doLJPME)
                 replacements["EWALD_DISPERSION_ALPHA"] = cl.doubleToString(dispersionAlpha);
             cl.getBondedUtilities().addInteraction(atoms, cl.replaceStrings(OpenCLKernelSources::pmeExclusions, replacements), force.getForceGroup());
@@ -1014,6 +1016,7 @@ void OpenCLCalcNonbondedForceKernel::initialize(const System& system, const Nonb
     baseParticleParams.initialize<mm_float4>(cl, cl.getPaddedNumAtoms(), "baseParticleParams");
     baseParticleParams.upload(baseParticleParamVec);
     map<string, string> replacements;
+    replacements["ONE_4PI_EPS0"] = cl.doubleToString(ONE_4PI_EPS0);
     if (usePosqCharges) {
         replacements["CHARGE1"] = "posq1.w";
         replacements["CHARGE2"] = "posq2.w";
@@ -1122,6 +1125,8 @@ void OpenCLCalcNonbondedForceKernel::initialize(const System& system, const Nonb
         exceptionOffsetIndices.upload(exceptionOffsetIndicesVec);
     }
     globalParams.initialize(cl, max((int) paramValues.size(), 1), cl.getUseDoublePrecision() ? sizeof(double) : sizeof(float), "globalParams");
+    if (paramValues.size() > 0)
+        globalParams.upload(paramValues, true);
     recomputeParams = true;
     
     // Initialize the kernel for updating parameters.
@@ -1315,8 +1320,8 @@ double OpenCLCalcNonbondedForceKernel::execute(ContextImpl& context, bool includ
             cl.executeKernel(computeExclusionParamsKernel, exclusionParams.getSize());
         if (usePmeQueue) {
             vector<cl::Event> events(1);
-            cl.getQueue().enqueueMarker(&events[0]);
-            pmeQueue.enqueueWaitForEvents(events);
+            cl.getQueue().enqueueMarkerWithWaitList(NULL, &events[0]);
+            pmeQueue.enqueueBarrierWithWaitList(&events);
         }
         if (hasOffsets)
             energy = 0.0; // The Ewald self energy was computed in the kernel.
@@ -1558,7 +1563,7 @@ double OpenCLCalcNonbondedForceKernel::execute(ContextImpl& context, bool includ
                 cl.executeKernel(pmeDispersionInterpolateForceKernel, cl.getNumAtoms());
         }
         if (usePmeQueue) {
-            pmeQueue.enqueueMarker(&pmeSyncEvent);
+            pmeQueue.enqueueMarkerWithWaitList(NULL, &pmeSyncEvent);
             cl.restoreDefaultQueue();
         }
     }
@@ -1847,8 +1852,8 @@ void OpenCLCalcCustomCVForceKernel::copyState(ContextImpl& context, ContextImpl&
             copyStateKernel.setArg<cl::Buffer>(5, cl2.getPosqCorrection().getDeviceBuffer());
         }
         else {
-            copyStateKernel.setArg<void*>(1, NULL);
-            copyStateKernel.setArg<void*>(5, NULL);
+            copyStateKernel.setArg(1, sizeof(void*), NULL);
+            copyStateKernel.setArg(5, sizeof(void*), NULL);
         }
 
         copyForcesKernel.setArg<cl::Buffer>(1, invAtomOrder.getDeviceBuffer());
